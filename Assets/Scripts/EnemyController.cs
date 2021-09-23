@@ -26,16 +26,40 @@ public class EnemyController : MonoBehaviour
     public int currentWayPointsIndex;
     public float enemySpeed = 1.0f; // 1m/s
 
+    [Range(1.0f, 60.0f)]
+    [SerializeField]
+    private float angularSpeedDegreePerSecond = 15.0f; // degrees/second
+
+    [Range(1.0f, 60.0f)]
+    [SerializeField]
+    private float angularSpeedRadPerSecond; // rad/second
+
+    private float attackDistance = 2;
+
+    private float Degree2Rad(float deg)
+    {
+        return deg * Mathf.PI / 180;
+    }
+
+    private float Rad2Degree(float rad)
+    {
+        return rad * 180 / Mathf.PI;
+    }
+
     // Start is called before the first frame update
     void Start()
     {
-        
+        // 360 degrees = 2 * PI rad
+        // => 1 rad = 180/PI degree
+        // => 1 degree = Pi/180 rad
+        angularSpeedRadPerSecond = Degree2Rad(angularSpeedDegreePerSecond);
     }
 
     // Update is called once per frame
     void Update()
     {
         HandleFSM();
+        angularSpeedRadPerSecond = Degree2Rad(angularSpeedDegreePerSecond);
     }
 
     public void HandleFSM()
@@ -75,13 +99,41 @@ public class EnemyController : MonoBehaviour
         {
             ChangeState(EnemyState.Patrolling);
         }
+        else if(Vector3.Distance(this.transform.position, playerGO.transform.position ) < attackDistance)
+        {
+            ChangeState(EnemyState.Attacking);
+        }
+        else
+        {
+            this.transform.position = MyMoveTowards(this.transform.position, playerGO.transform.position, enemySpeed * Time.deltaTime * 1.5f);
+        }
 
-        this.transform.position = MyMoveTowards(this.transform.position, playerGO.transform.position, enemySpeed*Time.deltaTime*1.5f);
     }
 
     public void HandleAttachkingState()
     {
-        Debug.Log(currentState);
+        // if player dies => patrolling
+        bool playerAlive = playerGO.GetComponent<PlayerController>().isAlive;
+        if (!playerAlive)
+        {
+            ChangeState(EnemyState.Patrolling);
+            return;
+        }
+        // if distance between player and enemy > attack distance:
+        float distanceE2P = Vector3.Distance(this.transform.position, playerGO.transform.position);
+        if (distanceE2P > attackDistance)
+        {
+            //  if see target => chase
+            if (CanSeePlayer() && distanceE2P < distanceToChase)
+            {
+                ChangeState(EnemyState.Chasing);
+            }else
+            {
+                //  else patrolling
+                ChangeState(EnemyState.Patrolling);
+
+            }
+        }
     }
 
     public void ChangeState(EnemyState newState)
@@ -130,7 +182,7 @@ public class EnemyController : MonoBehaviour
         //this.transform.rotation = qtargetrotation;  //Abrupt2: this is a too abrupt rotation; not very beleivable; to try, uncomment this and comment out the line below
 
         // This is the smoothest rotation; more beleivable
-        this.transform.rotation = Quaternion.Slerp(this.transform.rotation, qtargetrotation, Time.deltaTime);
+        this.transform.rotation = Quaternion.Slerp(this.transform.rotation, qtargetrotation, angularSpeedDegreePerSecond * Time.deltaTime);
         //-------- End of Changes related to Rotation -------------
 
         Vector3 movement = current + current2Target.normalized * maxDistanceDelta;
